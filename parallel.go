@@ -28,12 +28,14 @@ func (p parallel[T]) Execute(ctx context.Context, input T) (T, error) {
 		doneChannel <- true
 	}()
 
-	grp, ctx := errgroup.WithContext(ctx)
+	grp, c := errgroup.WithContext(ctx)
+	c, cancel := context.WithCancel(c)
+	defer cancel()
 
 	for _, step := range p.steps {
 		step := step
 		grp.Go(func() error {
-			v, err := step.Execute(ctx, input)
+			v, err := step.Execute(c, input)
 			if err != nil {
 				return err
 			}

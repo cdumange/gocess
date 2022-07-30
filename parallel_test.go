@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func simpleMerger[T any](_ context.Context, array []T) T {
@@ -78,6 +80,21 @@ func TestParallel_Execute(t *testing.T) {
 		assert.NotNil(t, v)
 
 		assert.Contains(t, values, v)
+	})
+
+	t.Run("errs", func(t *testing.T) {
+		m := new(MockStep[string])
+		m.On("Execute", mock.Anything, mock.Anything).
+			Return("", errors.New("an error")).
+			Times(3)
+
+		s := Step[string](m)
+		e := ParallelSteps(simpleMerger[string], s, s, s)
+		_, err := e.Execute(ctx, "an input")
+
+		require.Error(t, err)
+
+		m.AssertExpectations(t)
 	})
 }
 
