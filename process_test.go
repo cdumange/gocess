@@ -46,10 +46,9 @@ func TestGoProcess_Execute(t *testing.T) {
 			time.Sleep(time.Millisecond * 100)
 			cancel()
 		}()
-		v, err := p.Execute(c, input)
+		_, err := p.Execute(c, input)
 
 		assert.ErrorIs(t, err, context.Canceled)
-		assert.Nil(t, v)
 
 		assert.True(t, processes[0].(*timedReturnedStep[string]).Done)
 		assert.False(t, processes[1].(*timedReturnedStep[string]).Done)
