@@ -19,13 +19,13 @@ func TestGoProcess_Execute(t *testing.T) {
 		}
 
 		p := NewGoProcess[string](processes...)
-		v, err := p.Execute(ctx, &input)
+		v, err := p.Execute(ctx, input)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 
 		assert.NotNil(t, v)
-		assert.Equal(t, input, *v)
+		assert.Equal(t, input, v)
 
 		for _, p := range processes {
 			assert.True(t, p.(*timedReturnedStep[string]).Done)
@@ -46,7 +46,7 @@ func TestGoProcess_Execute(t *testing.T) {
 			time.Sleep(time.Millisecond * 100)
 			cancel()
 		}()
-		v, err := p.Execute(c, &input)
+		v, err := p.Execute(c, input)
 
 		assert.ErrorIs(t, err, context.Canceled)
 		assert.Nil(t, v)
@@ -61,7 +61,7 @@ type timedReturnedStep[T any] struct {
 	Done     bool
 }
 
-func (s *timedReturnedStep[T]) Execute(ctx context.Context, input *T) (*T, error) {
+func (s *timedReturnedStep[T]) Execute(_ context.Context, input T) (T, error) {
 	time.Sleep(s.duration)
 	s.Done = true
 

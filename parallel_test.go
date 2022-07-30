@@ -7,15 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cdumange/gocess/pointer"
 	"github.com/stretchr/testify/assert"
 )
 
-func simpleMerger[T any](ctx context.Context, array []*T) *T {
+func simpleMerger[T any](_ context.Context, array []T) T {
 	if len(array) == 0 {
-		return nil
+		return *new(T)
 	}
-
 	return array[0]
 }
 
@@ -36,7 +34,7 @@ func TestParallel_Execute(t *testing.T) {
 			step := ParallelSteps(simpleMerger[string], steps...)
 
 			start := time.Now()
-			_, err := step.Execute(ctx, pointer.To("test"))
+			_, err := step.Execute(ctx, "test")
 			elapsed := time.Since(start)
 			wg.Wait()
 			assert.NoError(t, err)
@@ -56,7 +54,7 @@ func TestParallel_Execute(t *testing.T) {
 			step := ParallelSteps(simpleMerger[string], steps...)
 
 			start := time.Now()
-			_, err := step.Execute(ctx, pointer.To("test"))
+			_, err := step.Execute(ctx, "test")
 			elapsed := time.Since(start)
 			wg.Wait()
 			assert.Error(t, err)
@@ -66,18 +64,20 @@ func TestParallel_Execute(t *testing.T) {
 
 	t.Run("merger", func(t *testing.T) {
 
+		values := []string{"1", "2", "3"}
 		steps := []Step[string]{
-			simpleValueErrorStep[string]{value: "1", err: nil},
-			simpleValueErrorStep[string]{value: "2", err: nil},
-			simpleValueErrorStep[string]{value: "3", err: nil},
+			simpleValueErrorStep[string]{value: values[0], err: nil},
+			simpleValueErrorStep[string]{value: values[1], err: nil},
+			simpleValueErrorStep[string]{value: values[2], err: nil},
 		}
 
 		e := ParallelSteps(simpleMerger[string], steps...)
 
-		v, err := e.Execute(ctx, pointer.To("honeymoon"))
+		v, err := e.Execute(ctx, "honeymoon")
 		assert.NoError(t, err)
 		assert.NotNil(t, v)
-		assert.Equal(t, "1", *v)
+
+		assert.Contains(t, values, v)
 	})
 }
 
@@ -86,7 +86,7 @@ type wgStep[T any] struct {
 	err error
 }
 
-func (m wgStep[T]) Execute(ctx context.Context, input *T) (*T, error) {
+func (m wgStep[T]) Execute(_ context.Context, input T) (T, error) {
 	time.Sleep(time.Millisecond * 100)
 	m.wg.Done()
 	return input, m.err
@@ -97,6 +97,6 @@ type simpleValueErrorStep[T any] struct {
 	err   error
 }
 
-func (m simpleValueErrorStep[T]) Execute(ctx context.Context, input *T) (*T, error) {
-	return &m.value, m.err
+func (m simpleValueErrorStep[T]) Execute(_ context.Context, _ T) (T, error) {
+	return m.value, m.err
 }

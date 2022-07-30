@@ -2,9 +2,8 @@ package gocess
 
 import (
 	"context"
-	"sync"
 
-	"go.uber.org/multierr"
+	"golang.org/x/sync/errgroup"
 )
 
 type parallel[T any] struct {
@@ -12,44 +11,49 @@ type parallel[T any] struct {
 	merger merger[T]
 }
 
-type merger[T any] func(ctx context.Context, array []*T) *T
+type merger[T any] func(ctx context.Context, array []T) T
 
-func (p parallel[T]) Execute(ctx context.Context, input *T) (*T, error) {
-	var err, errs error
+// Execute will create go routines for each parallel step to take.
+// an error on one or more of the steps will be blocking
+func (p parallel[T]) Execute(ctx context.Context, input T) (T, error) {
+	rets := make([]T, 0, len(p.steps))
 
-	rets := make([]*T, len(p.steps))
-
-	errChannel := make(chan error)
+	valueChannel := make(chan T)
 	doneChannel := make(chan bool)
 
 	go func() {
-		for err := range errChannel {
-			if err != nil {
-				errs = multierr.Append(errs, err)
-			}
+		for v := range valueChannel {
+			rets = append(rets, v)
 		}
 		doneChannel <- true
 	}()
 
-	wg := sync.WaitGroup{}
-	wg.Add(len(p.steps))
+	grp, ctx := errgroup.WithContext(ctx)
 
-	for i, v := range p.steps {
-		go func(index int, s Step[T]) {
-			input, err = s.Execute(ctx, input)
-			errChannel <- err
-			rets[index] = input
-			wg.Done()
-		}(i, v)
+	for _, step := range p.steps {
+		step := step
+		grp.Go(func() error {
+			v, err := step.Execute(ctx, input)
+			if err != nil {
+				return err
+			}
+
+			valueChannel <- v
+			return nil
+		})
 	}
 
-	wg.Wait()
-	close(errChannel)
+	err := grp.Wait()
+	close(valueChannel)
 
 	<-doneChannel
 	close(doneChannel)
 
-	return p.merger(ctx, rets), errs
+	if err != nil {
+		return input, err
+	}
+
+	return p.merger(ctx, rets), nil
 }
 
 func ParallelSteps[T any](m merger[T], array ...Step[T]) Step[T] {
