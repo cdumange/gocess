@@ -8,11 +8,16 @@ import (
 )
 
 type parallel[T any] struct {
-	steps []Step[T]
+	steps  []Step[T]
+	merger merger[T]
 }
+
+type merger[T any] func(ctx context.Context, array []*T) *T
 
 func (p parallel[T]) Execute(ctx context.Context, input *T) (*T, error) {
 	var err, errs error
+
+	rets := make([]*T, len(p.steps))
 
 	errChannel := make(chan error)
 	doneChannel := make(chan bool)
@@ -29,12 +34,13 @@ func (p parallel[T]) Execute(ctx context.Context, input *T) (*T, error) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(p.steps))
 
-	for _, v := range p.steps {
-		go func() {
-			input, err = v.Execute(ctx, input)
+	for i, v := range p.steps {
+		go func(index int, s Step[T]) {
+			input, err = s.Execute(ctx, input)
 			errChannel <- err
+			rets[index] = input
 			wg.Done()
-		}()
+		}(i, v)
 	}
 
 	wg.Wait()
@@ -43,9 +49,9 @@ func (p parallel[T]) Execute(ctx context.Context, input *T) (*T, error) {
 	<-doneChannel
 	close(doneChannel)
 
-	return input, errs
+	return p.merger(ctx, rets), errs
 }
 
-func ParallelSteps[T any](array ...Step[T]) Step[T] {
-	return &parallel[T]{steps: array}
+func ParallelSteps[T any](m merger[T], array ...Step[T]) Step[T] {
+	return &parallel[T]{steps: array, merger: m}
 }
