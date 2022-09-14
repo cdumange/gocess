@@ -32,3 +32,8 @@ func (p *GoProcess[T]) Execute(ctx context.Context, input T) (T, error) {
 	}
 	return input, nil
 }
+
+// AddStep adds a step to a defined GoProcess
+func (p *GoProcess[T]) AddStep(step Step[T]) {
+	p.Steps = append(p.Steps, step)
+}
